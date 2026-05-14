@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ultimate Weather App</title>
+
+<!-- PWA -->
+<link rel="manifest" href="data:application/json,{
+  &quot;name&quot;:&quot;Weather App&quot;,
+  &quot;short_name&quot;:&quot;Weather&quot;,
+  &quot;start_url&quot;:&quot;.&quot;,
+  &quot;display&quot;:&quot;standalone&quot;,
+  &quot;background_color&quot;:&quot;#4facfe&quot;,
+  &quot;theme_color&quot;:&quot;#4facfe&quot;
+}">
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(to bottom, #74ebd5, #9face6);
+    transition: background 0.4s;
+}
+
+body.dark {
+    background: linear-gradient(to bottom, #141e30, #243b55);
+    color: white;
+}
+
+.container {
+    width: 100%;
+    max-width: 420px;
+    background: white;
+    border-radius: 18px;
+    padding: 20px;
+    box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+    text-align: center;
+    animation: fadeIn 0.6s ease-in;
+}
+
+body.dark .container {
+    background: #1f2933;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+input {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+}
+
+.buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+}
+
+button {
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: #4facfe;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+button:active {
+    transform: scale(0.95);
+}
+
+.loader {
+    display: none;
+    margin: 15px 0;
+}
+
+.weather-icon {
+    width: 90px;
+}
+
+.offline {
+    color: red;
+    font-size: 14px;
+}
+
+.forecast, .hourly {
+    display: flex;
+    overflow-x: auto;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.card {
+    min-width: 70px;
+    padding: 8px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.05);
+    font-size: 12px;
+}
+
+body.dark .card {
+    background: rgba(255,255,255,0.1);
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <h2>Weather App 🌤️</h2>
+
+    <input id="city" placeholder="Enter city name">
+
+    <div class="buttons">
+        <button onclick="getWeather()">Search</button>
+        <button onclick="getLocation()">📍 GPS</button>
+        <button onclick="toggleUnit()">°C / °F</button>
+        <button onclick="toggleDark()">🌙</button>
+    </div>
+
+    <div class="loader" id="loader">Loading...</div>
+    <div class="offline" id="offline"></div>
+
+    <div id="current"></div>
+    <div class="hourly" id="hourly"></div>
+    <div class="forecast" id="forecast"></div>
+</div>
+
+<script>
+let isCelsius = true;
+let dataStore = null;
+const apiKey = "7132577711ee4b5eaaa92948261702";
+
+window.addEventListener("offline", () => {
+    document.getElementById("offline").innerText = "You are offline ❌";
+});
+
+window.addEventListener("online", () => {
+    document.getElementById("offline").innerText = "";
+});
+
+function toggleDark() {
+    document.body.classList.toggle("dark");
+}
+
+function toggleUnit() {
+    if (!dataStore) return;
+    isCelsius = !isCelsius;
+    render(dataStore);
+}
+
+function loader(show) {
+    document.getElementById("loader").style.display = show ? "block" : "none";
+}
+
+function getWeather(cityParam) {
+    const city = cityParam || document.getElementById("city").value;
+    if (!city) return alert("Enter city");
+
+    loader(true);
+
+    fetch(`https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city}&days=5`)
+        .then(res => res.json())
+        .then(data => {
+            dataStore = data;
+            render(data);
+            loader(false);
+        })
+        .catch(() => {
+            loader(false);
+            document.getElementById("current").innerText = "City not found ❌";
+        });
+}
+
+function render(data) {
+    const temp = isCelsius ? data.current.temp_c + " °C" : data.current.temp_f + " °F";
+
+    document.getElementById("current").innerHTML = `
+        <img src="https:${data.current.condition.icon}" class="weather-icon">
+        <p><b>${data.location.name}, ${data.location.country}</b></p>
+        <p>${temp}</p>
+        <p>${data.current.condition.text}</p>
+    `;
+
+    let hourlyHTML = "";
+    data.forecast.forecastday[0].hour.forEach(h => {
+        hourlyHTML += `
+            <div class="card">
+                <p>${h.time.slice(11)}</p>
+                <img src="https:${h.condition.icon}" width="30">
+                <p>${isCelsius ? h.temp_c+"°C" : h.temp_f+"°F"}</p>
+            </div>
+        `;
+    });
+    document.getElementById("hourly").innerHTML = hourlyHTML;
+
+    let forecastHTML = "";
+    data.forecast.forecastday.forEach(d => {
+        forecastHTML += `
+            <div class="card">
+                <p>${d.date.slice(5)}</p>
+                <img src="https:${d.day.condition.icon}" width="35">
+                <p>${d.day.avgtemp_c}°C</p>
+            </div>
+        `;
+    });
+    document.getElementById("forecast").innerHTML = forecastHTML;
+}
+
+function getLocation() {
+    navigator.geolocation.getCurrentPosition(pos => {
+        getWeather(`${pos.coords.latitude},${pos.coords.longitude}`);
+    });
+}
+
+/* PWA Service Worker */
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register(URL.createObjectURL(
+        new Blob([`
+            self.addEventListener('fetch', e => {
+                e.respondWith(fetch(e.request).catch(() => new Response("Offline")));
+            });
+        `], {type: "text/javascript"})
+    ));
+}
+
+
+</script>
+
+</body>
+</html>
